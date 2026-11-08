@@ -1,0 +1,35 @@
+
+# Maven build output
+target/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+out/
+
+# Eclipse and VS Code
+.classpath
+.project
+.settings/
+.vscode/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+**/application-local.properties
+**/application-local.yml
+**/application-local.yaml
+*.pem
+*.key
+
+# Logs
+*.log
+logs/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Downloaded ZIP archives
+*.zip
