@@ -1,4 +1,4 @@
-package com.syed.gatekeeper.management.responseDto;
+package com.syed.gatekeeper.management.dto.responseDto;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
