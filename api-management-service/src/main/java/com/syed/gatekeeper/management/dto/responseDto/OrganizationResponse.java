@@ -25,7 +25,7 @@ public class OrganizationResponse {
     private LocalDateTime updatedAt;
 
 
-    // ==================== ENTITY TO DTO ====================
+    // ENTITY TO DTO
 
     public static OrganizationResponse from(Organization organization) {
 

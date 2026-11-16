@@ -116,4 +116,6 @@ public class PlatformOrganizationController {
         organizationService.deleteTenantAdmin(organizationId);
         return ResponseEntity.noContent().build();
     }
+
+
 }

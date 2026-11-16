@@ -4,6 +4,7 @@ import com.syed.gatekeeper.management.dto.requestDto.OrganizationRequest;
 import com.syed.gatekeeper.management.dto.requestDto.OrganizationStatusRequest;
 import com.syed.gatekeeper.management.dto.requestDto.TenantAdminRequest;
 
+import com.syed.gatekeeper.management.dto.requestDto.TenantOrganizationRequest;
 import com.syed.gatekeeper.management.dto.responseDto.OrganizationResponse;
 import com.syed.gatekeeper.management.dto.responseDto.TenantAdminResponse;
 
@@ -41,6 +42,7 @@ public class OrganizationService {
     private final ManagementUserRepository managementUserRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+    private final TenantContext tenantContext;
 
 
     // ========================================================
@@ -353,4 +355,31 @@ public class OrganizationService {
                 );
     }
 
+    // Methods for Tenant Admin
+
+    @Transactional(readOnly = true)
+    public OrganizationResponse getOwnOrganization() {
+        return OrganizationResponse.from(tenantContext.getOrganization());
+    }
+
+    @Transactional
+    public OrganizationResponse updateOwnOrganization(TenantOrganizationRequest request) {
+        long startedAt = System.nanoTime();
+
+        Organization organization = tenantContext.getOrganization();
+
+        if(!organization.getName().equalsIgnoreCase(request.getName())
+                && organizationRepository.existsByNameIgnoreCase(request.getName())) {
+            throw new ApiException(HttpStatus.CONFLICT, "Organization name already exists");
+        }
+
+        organization.setName(request.getName());
+        organization.setUpdatedAt(LocalDateTime.now());
+
+//        auditService.record(organization, "UPDATE_OWN_ORGANIZATION",
+//                "ORGANIZATION", organization.getId().toString(), startedAt,
+//                "Tenant updated its organization name");
+
+        return OrganizationResponse.from(organization);
+    }
 }
