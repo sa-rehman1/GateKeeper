@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class TenantContext {
 
-    private OrganizationRepository organizationRepository;
+    private final OrganizationRepository organizationRepository;
 
     public Organization getOrganization(){
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -24,7 +24,8 @@ public class TenantContext {
             throw new ApiException(HttpStatus.FORBIDDEN , "Tenant identity is missing");
         }
 
-        Long organizationId = ((JwtAuthenticationToken) authentication).getToken().getClaim("organizationId");
+        Number organizationIdClaim = ((JwtAuthenticationToken) authentication).getToken().getClaim("organizationId");
+        Long organizationId = organizationIdClaim == null ? null : organizationIdClaim.longValue();
 
         if(organizationId == null){
             throw new ApiException(HttpStatus.FORBIDDEN , "Tenant identity is missing");

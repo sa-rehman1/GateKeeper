@@ -169,7 +169,8 @@ public class RouteService {
         route.setIdempotencyEnabled(request.isIdempotencyEnabled());
         route.setActive(request.isActive());
         route.setUpdatedAt(LocalDateTime.now());
-        route.setAllowedMethods(normalizeMethods(request.getAllowedMethods()));
+        route.getAllowedMethods().clear();
+        route.getAllowedMethods().addAll(normalizeMethods(request.getAllowedMethods()));
 
         route.getHeaderRules().clear();
         for(HeaderRuleRequest ruleRequest : request.getHeaderRules()) {
@@ -201,7 +202,8 @@ public class RouteService {
 
         try {
             URI uri = URI.create(request.getTargetBaseUrl());
-            if(!"http".equalsIgnoreCase(uri.getScheme()) && !"https".equalsIgnoreCase(uri.getScheme())) {
+            if ((!"http".equalsIgnoreCase(uri.getScheme()) && !"https".equalsIgnoreCase(uri.getScheme()))
+                    || uri.getHost() == null || uri.getHost().isBlank()) {
                 throw new IllegalArgumentException();
             }
         }
@@ -230,14 +232,14 @@ public class RouteService {
         }
     }
 
+    private static final Set<String> SUPPORTED_METHODS =
+            Set.of("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS");
+
     private Set<String> normalizeMethods(Set<String> methods) {
-        Set<String> normalized = new HashSet<String>();
-        for(String method : methods) {
-            String value = method.toUpperCase(Locale.ENGLISH);
-            try {
-                HttpMethod.valueOf(value);
-            }
-            catch(IllegalArgumentException exception) {
+        Set<String> normalized = new HashSet<>();
+        for (String method : methods) {
+            String value = method.toUpperCase(Locale.ROOT);
+            if (!SUPPORTED_METHODS.contains(value)) {
                 throw new ApiException(HttpStatus.BAD_REQUEST, "Unsupported HTTP method: " + method);
             }
             normalized.add(value);
