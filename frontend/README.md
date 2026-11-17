@@ -25,3 +25,7 @@ Platform administrators can manage organizations and tenant admins. Tenant admin
 The UI uses actual backend data (no mock API responses). Tokens are kept in sessionStorage and cleared at expiration or sign-out. The backend remains responsible for authorization.
 
 The console covers the management APIs implemented to date. Smart Gateway and Analytics UI features can be added when their backend APIs are available.
+
+## Visual design
+
+Industrial Control Room: process-instrumentation inspired layout with graphite surfaces, volt-lime control states, IBM Plex Sans Condensed typography and JetBrains Mono operational labels. The UI keeps the existing management API endpoints and permissions unchanged.
