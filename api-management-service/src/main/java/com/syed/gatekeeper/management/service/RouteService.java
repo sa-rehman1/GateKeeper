@@ -7,13 +7,13 @@ import com.syed.gatekeeper.management.dto.responseDto.AuditRecordResponse;
 import com.syed.gatekeeper.management.dto.responseDto.RouteResponse;
 import com.syed.gatekeeper.management.dto.responseDto.RouteVersionResponse;
 import com.syed.gatekeeper.management.entity.*;
+import com.syed.gatekeeper.management.event.GatewayConfigurationEventService;
 import com.syed.gatekeeper.management.exception.ApiException;
 import com.syed.gatekeeper.management.repository.ApiRouteRepository;
 import com.syed.gatekeeper.management.repository.ControlPlaneAuditRecordRepository;
 import com.syed.gatekeeper.management.repository.RouteConfigurationVersionRepository;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,30 +33,31 @@ public class RouteService {
     private final TenantContext tenantContext;
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
+    private final GatewayConfigurationEventService gatewayConfigurationEventService;
 
     @Transactional
     public RouteResponse create(@Valid RouteRequest request) {
         long startedAt = System.nanoTime();
 
         Organization organization = tenantContext.getOrganization();
-        validate(request , organization);
+        validate(request, organization);
 
-        if(apiRouteRepository.existsByOrganizationIdAndRouteId(organization.getId(), request.getRouteId())){
-            throw new ApiException(HttpStatus.CONFLICT , "Route ID already exists for this organization");
-        };
+        if (apiRouteRepository.existsByOrganizationIdAndRouteId(organization.getId(), request.getRouteId())) {
+            throw new ApiException(HttpStatus.CONFLICT, "Route ID already exists for this organization");
+        }
 
         ApiRoute route = new ApiRoute();
         route.setOrganization(organization);
         route.setConfigurationVersion(1L);
         route.setCreatedAt(LocalDateTime.now());
-        apply(route , request);
+        apply(route, request);
 
         apiRouteRepository.save(route);
 
-        saveVersion(route , "CREATED");
+        saveVersion(route, "CREATED");
 
-        auditService.record(organization , "CREATE_ROUTE" , "API_ROUTE",
-                route.getRouteId(),startedAt,"Route configuration Version 1 created");
+        auditService.record(organization, "CREATE_ROUTE", "API_ROUTE",
+                route.getRouteId(), startedAt, "Route configuration Version 1 created");
 
         return RouteResponse.from(route);
     }
@@ -70,7 +71,7 @@ public class RouteService {
     @Transactional(readOnly = true)
     public RouteResponse findById(Long id) {
         Organization organization = tenantContext.getOrganization();
-        return RouteResponse.from(getOwnedRoute(id , organization.getId()));
+        return RouteResponse.from(getOwnedRoute(id, organization.getId()));
     }
 
     @Transactional
@@ -80,14 +81,13 @@ public class RouteService {
         Organization organization = tenantContext.getOrganization();
         ApiRoute route = getOwnedRoute(id, organization.getId());
 
-        if(!route.getRouteId().equals(request.getRouteId())) {
+        if (!route.getRouteId().equals(request.getRouteId())) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "routeId cannot be changed");
         }
 
         validate(request, organization);
 
         route.setConfigurationVersion(route.getConfigurationVersion() + 1);
-
         apply(route, request);
 
         saveVersion(route, "UPDATED");
@@ -141,11 +141,11 @@ public class RouteService {
     public List<RouteVersionResponse> getVersions(String routeId) {
         Organization organization = tenantContext.getOrganization();
 
-        List<RouteVersionResponse> response = new ArrayList<RouteVersionResponse>();
+        List<RouteVersionResponse> response = new ArrayList<>();
         List<RouteConfigurationVersion> versions = versionRepository
                 .findAllByOrganizationIdAndRouteIdOrderByVersionNumberDesc(organization.getId(), routeId);
 
-        for(RouteConfigurationVersion version : versions) {
+        for (RouteConfigurationVersion version : versions) {
             response.add(RouteVersionResponse.from(version));
         }
         return response;
@@ -155,8 +155,6 @@ public class RouteService {
     public List<RouteResponse> findAllActiveForGateway() {
         return toResponses(apiRouteRepository.findAllByActiveTrueAndOrganizationStatus(OrganizationStatus.ACTIVE));
     }
-
-
 
     private void apply(ApiRoute route, RouteRequest request) {
         route.setRouteId(request.getRouteId());
@@ -173,7 +171,7 @@ public class RouteService {
         route.getAllowedMethods().addAll(normalizeMethods(request.getAllowedMethods()));
 
         route.getHeaderRules().clear();
-        for(HeaderRuleRequest ruleRequest : request.getHeaderRules()) {
+        for (HeaderRuleRequest ruleRequest : request.getHeaderRules()) {
             RouteHeaderRule rule = new RouteHeaderRule();
             rule.setRoute(route);
             rule.setDirection(ruleRequest.getDirection().toUpperCase(Locale.ENGLISH));
@@ -186,17 +184,16 @@ public class RouteService {
         }
     }
 
-
     // HELPER METHODS
     private void validate(RouteRequest request, Organization organization) {
         String tenantPrefix = "/" + organization.getSlug() + "/";
 
-        if(!request.getPathPattern().startsWith(tenantPrefix)) {
+        if (!request.getPathPattern().startsWith(tenantPrefix)) {
             throw new ApiException(HttpStatus.BAD_REQUEST,
                     "pathPattern must start with the tenant prefix " + tenantPrefix);
         }
 
-        if(!request.getTargetPathPrefix().startsWith("/")) {
+        if (!request.getTargetPathPrefix().startsWith("/")) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "targetPathPrefix must start with /");
         }
 
@@ -206,26 +203,25 @@ public class RouteService {
                     || uri.getHost() == null || uri.getHost().isBlank()) {
                 throw new IllegalArgumentException();
             }
-        }
-        catch(IllegalArgumentException exception) {
+        } catch (IllegalArgumentException exception) {
             throw new ApiException(HttpStatus.BAD_REQUEST,
                     "targetBaseUrl must be a valid HTTP or HTTPS URL");
         }
 
         normalizeMethods(request.getAllowedMethods());
 
-        for(HeaderRuleRequest rule : request.getHeaderRules()) {
+        for (HeaderRuleRequest rule : request.getHeaderRules()) {
             String direction = rule.getDirection().toUpperCase(Locale.ENGLISH);
             String action = rule.getAction().toUpperCase(Locale.ENGLISH);
-            if(!"REQUEST".equals(direction) && !"RESPONSE".equals(direction)) {
+            if (!"REQUEST".equals(direction) && !"RESPONSE".equals(direction)) {
                 throw new ApiException(HttpStatus.BAD_REQUEST,
                         "Header direction must be REQUEST or RESPONSE");
             }
-            if(!"ADD".equals(action) && !"REMOVE".equals(action)) {
+            if (!"ADD".equals(action) && !"REMOVE".equals(action)) {
                 throw new ApiException(HttpStatus.BAD_REQUEST,
                         "Header action must be ADD or REMOVE");
             }
-            if("ADD".equals(action) &&
+            if ("ADD".equals(action) &&
                     (rule.getHeaderValue() == null || rule.getHeaderValue().trim().isEmpty())) {
                 throw new ApiException(HttpStatus.BAD_REQUEST, "ADD header rules require headerValue");
             }
@@ -247,8 +243,6 @@ public class RouteService {
         return normalized;
     }
 
-
-
     private void saveVersion(ApiRoute route, String changeType) {
         RouteConfigurationVersion version = new RouteConfigurationVersion();
         version.setOrganization(route.getOrganization());
@@ -257,12 +251,22 @@ public class RouteService {
         version.setChangeType(changeType);
         version.setConfigurationSnapshot(objectMapper.writeValueAsString(RouteResponse.from(route)));
         version.setCreatedAt(LocalDateTime.now());
+
         versionRepository.save(version);
+
+        // Publish a Spring application event within the current DB transaction.
+        // GatewayConfigurationKafkaPublisher sends it to Kafka AFTER_COMMIT.
+        gatewayConfigurationEventService.publish(
+                changeType,
+                route.getOrganization().getId(),
+                route.getRouteId(),
+                route.getConfigurationVersion()
+        );
     }
 
     private List<RouteResponse> toResponses(List<ApiRoute> routes) {
-        List<RouteResponse> response = new ArrayList<RouteResponse>();
-        for(ApiRoute route : routes) {
+        List<RouteResponse> response = new ArrayList<>();
+        for (ApiRoute route : routes) {
             response.add(RouteResponse.from(route));
         }
         return response;
@@ -278,17 +282,13 @@ public class RouteService {
     public List<AuditRecordResponse> getAuditRecords() {
         Organization organization = tenantContext.getOrganization();
 
-        List<AuditRecordResponse> response = new ArrayList<AuditRecordResponse>();
-
+        List<AuditRecordResponse> response = new ArrayList<>();
         List<ControlPlaneAuditRecord> records = auditRecordRepository
                 .findAllByOrganizationIdOrderByCreatedAtDesc(organization.getId());
 
-        for(ControlPlaneAuditRecord record : records) {
+        for (ControlPlaneAuditRecord record : records) {
             response.add(AuditRecordResponse.from(record));
         }
         return response;
     }
-
-
-
 }

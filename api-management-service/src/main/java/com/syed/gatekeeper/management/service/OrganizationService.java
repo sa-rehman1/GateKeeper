@@ -3,7 +3,6 @@ package com.syed.gatekeeper.management.service;
 import com.syed.gatekeeper.management.dto.requestDto.OrganizationRequest;
 import com.syed.gatekeeper.management.dto.requestDto.OrganizationStatusRequest;
 import com.syed.gatekeeper.management.dto.requestDto.TenantAdminRequest;
-
 import com.syed.gatekeeper.management.dto.requestDto.TenantOrganizationRequest;
 import com.syed.gatekeeper.management.dto.responseDto.OrganizationResponse;
 import com.syed.gatekeeper.management.dto.responseDto.TenantAdminResponse;
@@ -12,7 +11,7 @@ import com.syed.gatekeeper.management.entity.ManagementUser;
 import com.syed.gatekeeper.management.entity.Organization;
 import com.syed.gatekeeper.management.entity.OrganizationStatus;
 import com.syed.gatekeeper.management.entity.Role;
-
+import com.syed.gatekeeper.management.event.GatewayConfigurationEventService;
 import com.syed.gatekeeper.management.exception.ApiException;
 
 import com.syed.gatekeeper.management.repository.ManagementUserRepository;
@@ -43,6 +42,7 @@ public class OrganizationService {
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final TenantContext tenantContext;
+    private final GatewayConfigurationEventService gatewayConfigurationEventService;
 
 
     // ========================================================
@@ -69,6 +69,8 @@ public class OrganizationService {
         organization.setUpdatedAt(now);
 
         organizationRepository.save(organization);
+
+        publishOrganizationChange(organization, "CREATED");
 
         return OrganizationResponse.from(organization);
     }
@@ -113,6 +115,8 @@ public class OrganizationService {
         organization.setSlug(request.getSlug());
         organization.setUpdatedAt(LocalDateTime.now());
 
+        publishOrganizationChange(organization, "UPDATED");
+
         return OrganizationResponse.from(organization);
     }
 
@@ -137,6 +141,8 @@ public class OrganizationService {
         organization.setStatus(request.getStatus());
         organization.setUpdatedAt(LocalDateTime.now());
 
+        publishOrganizationChange(organization, "STATUS_CHANGED");
+
         return OrganizationResponse.from(organization);
     }
 
@@ -153,6 +159,8 @@ public class OrganizationService {
         organization.setStatus(OrganizationStatus.DELETED);
         organization.setDeletedAt(now);
         organization.setUpdatedAt(now);
+
+        publishOrganizationChange(organization, "DELETED");
     }
 
 
@@ -355,6 +363,22 @@ public class OrganizationService {
                 );
     }
 
+
+    // ==================== HELPER: PUBLISH ORGANIZATION CHANGE ====================
+
+    private void publishOrganizationChange(Organization organization, String changeType) {
+
+        // Organization-level changes have no routeId or route configuration version.
+        // The Kafka publisher receives this Spring event after transaction commit.
+        gatewayConfigurationEventService.publish(
+                changeType,
+                organization.getId(),
+                null,
+                null
+        );
+    }
+
+
     // Methods for Tenant Admin
 
     @Transactional(readOnly = true)
@@ -368,13 +392,15 @@ public class OrganizationService {
 
         Organization organization = tenantContext.getOrganization();
 
-        if(!organization.getName().equalsIgnoreCase(request.getName())
+        if (!organization.getName().equalsIgnoreCase(request.getName())
                 && organizationRepository.existsByNameIgnoreCase(request.getName())) {
             throw new ApiException(HttpStatus.CONFLICT, "Organization name already exists");
         }
 
         organization.setName(request.getName());
         organization.setUpdatedAt(LocalDateTime.now());
+
+        publishOrganizationChange(organization, "UPDATED");
 
 //        auditService.record(organization, "UPDATE_OWN_ORGANIZATION",
 //                "ORGANIZATION", organization.getId().toString(), startedAt,
